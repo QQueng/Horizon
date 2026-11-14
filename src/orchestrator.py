@@ -38,6 +38,7 @@ from .ai.tokens import get_usage_snapshot
 from .processing import ProfileRegistry
 from .processing.content import COMMENTS_MARKER, split_content
 from .processing.tools import ToolRegistry
+from .timestamps import within_collection_window
 
 
 _TRACKING_QUERY_PARAMETERS = {
@@ -289,8 +290,23 @@ class HorizonOrchestrator:
                     f"→ {len(merged_items)} unique items\n"
                 )
 
+            # Drop items outside the collection window before any model call.
+            fresh_items = [
+                item for item in merged_items
+                if within_collection_window(item.published_at, since)
+            ]
+            if len(fresh_items) < len(merged_items):
+                self.console.print(
+                    f"{self.icons['date']} Dropped "
+                    f"{len(merged_items) - len(fresh_items)} items older than "
+                    f"the collection window\n"
+                )
+            if not fresh_items:
+                self.console.print("[yellow]No content inside the collection window. Exiting.[/yellow]")
+                return
+
             # 4. Analyze with AI
-            analyzed_items = await self.analyze_items(merged_items)
+            analyzed_items = await self.analyze_items(fresh_items)
             self.console.print(
                 f"{self.icons['ai']} Analyzed {len(analyzed_items)} items with AI\n"
             )
