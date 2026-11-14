@@ -1,55 +1,97 @@
-# Fork 部署准备
+# Fork 部署
 
-仓库：`QQueng/Horizon`（fork 自 `Thysrael/Horizon`）。
+仓库：`QQueng/Horizon`。默认分支：`main`。
 
-这份准备只提交配置和工作流。日报没有运行，也没有发布。
+工作流文件：`.github/workflows/daily-summary.yml`。Actions 里的名称：`Horizon daily digest`。
 
-## 配置来源
+日报在合并到 `main` 之后，才会按计划开始。合并之前不会每天运行。
 
-`data/config.deploy.json` 来自官方 GitHub Actions 示例 `data/config.github.json`。
+## 时间
 
-其中的模型、语言和信息源是上游模板自带的样本，用来让配置能够通过校验。模型服务、密钥、关注主题和是否公开日报都还没有选定。
+定时表达式是 UTC `0 0 * * *`。上海没有夏令时，这对应每天北京时间 08:00，含周六和周日。
 
-相对该官方示例，只做了两处安全收紧：
+GitHub Actions 的定时任务可以晚于设定时间才开始。这个配置不保证 08:00 准点生成，也不保证 08:00 已经送到聊天。
 
-- `webhook.enabled` 为 `false`
-- 带有 `${LWN_KEY}` 的 LWN.net 源为 `enabled: false`
+手动 `workflow_dispatch` 仍保留。`run_pipeline` 默认关闭时只做预检。定时触发不读取这个默认值：预检通过后会运行日报流水线。预检失败则不会调用模型，也不会上传日报。
 
-上游模板文件 `.github/workflows/daily-summary.yml.disabled` 保持原样，作为官方参考。
+## 模型
 
-## 开关
+提供方是 DeepSeek。模型标识使用官方当前名称 `deepseek-flash`，对应文档中的 DeepSeek-V4.1-Flash-1017。
 
-| 项目 | 状态 |
+依据是 DeepSeek 公开文档，没有调用 API：
+
+- https://api-docs.deepseek.com/ 将 `model` 列为 `deepseek-flash` 与 `deepseek-v4-pro`，并写明使用 `deepseek-flash` 作为模型名。
+- https://api-docs.deepseek.com/quick_start/pricing/ 写明 `deepseek-v4-flash` 是仍被接受的旧名，对应模型已退役，请求由 DeepSeek-V4.1-Flash-1017 提供并按 Flash 价格计费。
+- https://api-docs.deepseek.com/guides/thinking_mode 写明思考模式默认开启。配置里的 `ai.extra_body.thinking.type` 为 `disabled`，让每日摘要走非思考模式。这是可调整项。
+
+接口地址是 `https://api.deepseek.com`。密钥只从名为 `DEEPSEEK_API_KEY` 的 Actions secret 读入。仓库文件不包含密钥值。
+
+定时运行和手动打开 `run_pipeline` 都会调用这个付费接口。只跑预检不会调用。
+
+默认输出语言是中文（`ai.languages` 为 `zh`）。
+
+## 四类上限
+
+这些数字是上限，不是每天必须凑满的条数。分数低于 7 的条目不会为了凑满名额留下。某一类当天没有足够合格内容时，该类可以少于 5 条，整天也可以少于 20 条。
+
+| 项目 | 可调整默认值 |
 | --- | --- |
-| 定时任务 | 关闭。`daily-summary.yml` 只有手动 `workflow_dispatch` |
-| GitHub Pages | 关闭。工作流不发布、不推送页面 |
-| 邮件、Webhook、微信 | 关闭。运行环境不接收 Webhook 地址 |
-| 默认手动运行 | 只检查配置 |
-| 调用模型 | 检查通过，并且手动打开 `run_pipeline` 之后才会执行 |
+| 日报总量 `digest.max_items` | 20 |
+| AI与科技 `ai-tech` | 5 |
+| 财经与市场 `finance-markets` | 5 |
+| 工程与建筑 `engineering-architecture` | 5 |
+| 历史与人文 `history-humanities` | 5 |
+| 未分类 `default_group_limit` | 1 |
 
-合并到默认分支之后，可以在 Actions 里手动运行 “Horizon manual run”。未设置必需 secret 时，检查步骤会失败并打印变量名，到此停止。默认不勾选 `run_pipeline` 时，即使 secret 已经存在，也只做检查。
+抓取窗口是最近 24 小时。历史与人文只收录新发表研究、考古报道、博物馆与遗产动态。配置要求模型不要把古代故事改写成当天突发新闻。
 
-打开 `run_pipeline` 后，生成的文件只留在 runner 上，作业结束即丢弃。工作流不上传 artifact，不把日报提交回仓库。公开仓库的 Actions 日志仍可能显示命令输出；第一次真正运行前需要接受这一点，或先调整仓库可见性。
+2026-11-14 检查时，故宫、中国国家博物馆、国家文物局和中国考古网没有返回可用的公开 RSS。历史类因此使用下面核对过的公开源；中文文化源只作为人文入口，达不到分数就不会占名额。
 
-`deploy-docs.yml` 仍是上游原文件。这次改动不包含它的触发路径，因此合并这次改动不会发布 Pages。
+## 已核对的来源
 
-## 调用模型前需要的 secret
+2026-11-14 用公开 HTTP 请求核对过：返回 RSS/Atom，且条目带有日期。
 
-当前这份配置要求：
+| 类别 | 名称 | 链接 |
+| --- | --- | --- |
+| AI与科技 | 量子位 | https://www.qbitai.com/feed |
+| AI与科技 | 雷峰网 | https://www.leiphone.com/feed |
+| AI与科技 | InfoQ 中文 | https://www.infoq.cn/feed |
+| AI与科技 | MIT Technology Review | https://www.technologyreview.com/feed/ |
+| 财经与市场 | 华尔街见闻 | https://dedicated.wallstreetcn.com/rss.xml |
+| 财经与市场 | FT中文网 | https://www.ftchinese.com/rss/news |
+| 财经与市场 | 经济观察网 | https://www.eeo.com.cn/rss.xml |
+| 工程与建筑 | ArchDaily 中文 | https://www.archdaily.cn/cn/feed |
+| 工程与建筑 | 建筑学院 | https://www.archcollege.com/feed |
+| 工程与建筑 | Dezeen | https://www.dezeen.com/feed/ |
+| 工程与建筑 | Engineering News-Record | https://www.enr.com/rss/articles |
+| 历史与人文 | 中国新闻网文化 | https://www.chinanews.com.cn/rss/culture.xml |
+| 历史与人文 | Archaeology Magazine | https://www.archaeology.org/feed/ |
+| 历史与人文 | Science News Archaeology | https://www.sciencenews.org/topic/archaeology/feed |
+| 历史与人文 | Nature Archaeology | https://www.nature.com/subjects/archaeology.rss |
 
-- `DEEPSEEK_API_KEY`
+## 产物
 
-在仓库的 Settings → Secrets and variables → Actions 中添加该名称。把密钥写在 secret 里，不要写进仓库文件。
+成功生成非空中文 Markdown 后，工作流把它复制为 `digest/horizon-zh.md`，再上传为 Actions artifact。
 
-工作流还会把官方模板里的其他模型变量名传给检查步骤，供以后改配置时识别。当前示例不要求它们：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`GOOGLE_API_KEY`、`AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_ENDPOINT`、`MINIMAX_API_KEY`、`DASHSCOPE_API_KEY`、`DOUBAO_API_KEY`、`LWN_KEY`。
+| 项 | 值 |
+| --- | --- |
+| 工作流名称 | `Horizon daily digest` |
+| 默认分支 | `main` |
+| artifact 名称 | `horizon-digest` |
+| artifact 内路径 | `digest/horizon-zh.md` |
+| 保留 | 7 天 |
 
-Actions 会自动提供 `GITHUB_TOKEN`。不需要另建同名 secret。
+失败、或没有生成非空中文日报时，不上传文件，也不写入占位日报。上传内容只有这一份 Markdown，不包含密钥、环境变量或 `.env`。
 
-## 继续之前还需要的选择
+主助手可以用 GitHub 的普通 artifact 接口读取，例如列出某次运行的 artifacts，再下载 zip：
 
-- 实际要使用的模型服务。当前 DeepSeek 与 `deepseek-v4-flash` 是官方示例。
-- 该服务的 API 密钥，对应上表中的 secret 名称；若改了 `ai.api_key_env`，secret 名称跟着改。
-- 关注的信息源。当前来源列表是官方示例。
-- 是否公开日报，以及是否启用 Pages。
-- 是否定时运行；若要定时，需要时区和本地时间。GitHub 的 cron 默认按 UTC 解释。
-- 是否使用邮件、Webhook 或微信。启用发送需要另行打开配置，并让工作流传入对应 secret。
+- `GET /repos/QQueng/Horizon/actions/runs/{run_id}/artifacts`
+- `GET /repos/QQueng/Horizon/actions/artifacts/{artifact_id}/zip`
+
+zip 里的路径是 `digest/horizon-zh.md`。这不是 GitHub Pages，页面发布保持关闭。
+
+## 仍然关闭
+
+邮件、微信、Webhook 和 GitHub Pages 保持关闭。工作流不接收 Webhook 地址，也不推送 `gh-pages`。
+
+调用模型前仍需要的 secret 名称：`DEEPSEEK_API_KEY`。

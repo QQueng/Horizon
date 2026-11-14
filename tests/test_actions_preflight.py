@@ -15,34 +15,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "actions_preflight.py"
 DEPLOY = ROOT / "data" / "config.deploy.json"
-OFFICIAL = ROOT / "data" / "config.github.json"
 WORKFLOW = ROOT / ".github" / "workflows" / "daily-summary.yml"
 DISABLED = ROOT / ".github" / "workflows" / "daily-summary.yml.disabled"
-
-
-def collect_diffs(left, right, prefix=""):
-    diffs = {}
-    if type(left) is not type(right):
-        diffs[prefix or "<root>"] = (left, right)
-        return diffs
-    if isinstance(left, dict):
-        for key in set(left) | set(right):
-            path = f"{prefix}.{key}" if prefix else key
-            if key not in left or key not in right:
-                diffs[path] = (left.get(key, "<missing>"), right.get(key, "<missing>"))
-            else:
-                diffs.update(collect_diffs(left[key], right[key], path))
-        return diffs
-    if isinstance(left, list):
-        if len(left) != len(right):
-            diffs[prefix or "<root>"] = (left, right)
-            return diffs
-        for index, (item, other) in enumerate(zip(left, right)):
-            diffs.update(collect_diffs(item, other, f"{prefix}[{index}]"))
-        return diffs
-    if left != right:
-        diffs[prefix or "<root>"] = (left, right)
-    return diffs
 
 
 def run_preflight(config: Path, env_updates: dict[str, str] | None = None):
@@ -64,48 +38,73 @@ def run_preflight(config: Path, env_updates: dict[str, str] | None = None):
     )
 
 
-def test_deploy_config_matches_official_example_except_safety_switches():
-    official = json.loads(OFFICIAL.read_text(encoding="utf-8"))
+def test_deploy_config_caps_four_categories_without_secrets():
     deploy = json.loads(DEPLOY.read_text(encoding="utf-8"))
-    diffs = collect_diffs(official, deploy)
-    lwn_paths = [
-        path for path in diffs
-        if path.startswith("sources.rss[") and path.endswith(".enabled")
-    ]
-    assert lwn_paths
-    lwn_path = lwn_paths[0]
-    index = int(lwn_path.split("[", 1)[1].split("]", 1)[0])
-    assert official["sources"]["rss"][index]["name"] == "LWN.net"
-    assert "${LWN_KEY}" in official["sources"]["rss"][index]["url"]
-    assert diffs == {
-        "webhook.enabled": (True, False),
-        lwn_path: (True, False),
-    }
-    assert deploy["ai"] == official["ai"]
+    text = DEPLOY.read_text(encoding="utf-8")
     assert deploy["ai"]["provider"] == "deepseek"
+    assert deploy["ai"]["model"] == "deepseek-flash"
+    assert deploy["ai"]["base_url"] == "https://api.deepseek.com"
     assert deploy["ai"]["api_key_env"] == "DEEPSEEK_API_KEY"
+    assert deploy["ai"]["languages"] == ["zh"]
+    assert deploy["ai"]["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert deploy["webhook"]["enabled"] is False
+    assert deploy["wechat"]["enabled"] is False
+    assert "email" not in deploy
+    assert deploy["sources"]["hackernews"]["enabled"] is False
+    assert deploy["sources"]["reddit"]["enabled"] is False
+    assert deploy["sources"]["telegram"]["enabled"] is False
+    assert deploy["digest"]["max_items"] == 20
+    assert deploy["digest"]["default_group_limit"] == 1
+    groups = deploy["digest"]["category_groups"]
+    assert [group["limit"] for group in groups.values()] == [5, 5, 5, 5]
+    assert set(groups) == {
+        "ai-tech",
+        "finance-markets",
+        "engineering-architecture",
+        "history-humanities",
+    }
+    feeds = deploy["sources"]["rss"]
+    assert {item["category"] for item in feeds} == set(groups)
+    assert all(item["enabled"] and item["url"].startswith("https://") for item in feeds)
+    assert "${" not in text
+    assert "deepseek-v4-flash" not in text
+    assert "sk-" not in text
+    for profile_id, threshold in deploy["processing"]["profile_settings"].items():
+        assert threshold["threshold"] == 7.0
+        assert profile_id in {
+            "tech-news", "finance-news", "engineering-news", "humanities-news",
+        }
 
 
-def test_workflow_is_manual_and_does_not_publish():
+def test_workflow_schedule_runs_pipeline_and_uploads_digest_artifact():
     text = WORKFLOW.read_text(encoding="utf-8")
+    assert "name: Horizon daily digest" in text
+    assert "cron: '0 0 * * *'" in text
     assert "workflow_dispatch:" in text
     assert "run_pipeline:" in text
     assert "default: false" in text
-    assert "schedule:" not in text
-    assert "cron:" not in text
+    assert (
+        "success() && (github.event_name == 'schedule' || "
+        "inputs.run_pipeline == true || inputs.run_pipeline == 'true')"
+    ) in text
     assert "peaceiris" not in text
     assert "gh-pages" not in text
-    assert "upload-artifact" not in text
     assert "HORIZON_WEBHOOK_URL" not in text
     assert "HORIZON_ALLOW_DELIVERY" not in text
     assert "contents: write" not in text
     assert "contents: read" in text
+    assert "actions: write" in text
     assert "persist-credentials: false" in text
+    assert "name: horizon-digest" in text
+    assert "path: digest/horizon-zh.md" in text
+    assert "retention-days: 7" in text
+    assert "if-no-files-found: error" in text
+    assert "include-hidden-files: false" in text
     assert text.count("uv run horizon") == 1
+    assert text.count("actions/upload-artifact@v4") == 1
     assert text.rindex("scripts/actions_preflight.py") < text.index("uv run horizon")
-    assert "if: ${{ inputs.run_pipeline }}" in text
+    assert text.index("uv run horizon") < text.index("actions/upload-artifact@v4")
     disabled = DISABLED.read_text(encoding="utf-8")
-    assert "cron:" in disabled
     assert "peaceiris/actions-gh-pages" in disabled
 
 
@@ -167,17 +166,23 @@ def test_enabled_delivery_is_blocked_without_sending(tmp_path: Path):
     assert "horizon-preflight-dummy-value" not in output
 
 
-def test_enabled_lwn_source_requires_its_name_only(tmp_path: Path):
+def test_enabled_placeholder_source_requires_its_name_only(tmp_path: Path):
     payload = json.loads(DEPLOY.read_text(encoding="utf-8"))
-    for feed in payload["sources"]["rss"]:
-        if feed["name"] == "LWN.net":
-            feed["enabled"] = True
+    payload["sources"]["rss"].append({
+        "name": "Placeholder feed",
+        "url": "https://example.com/feed?key=${LWN_KEY}",
+        "enabled": True,
+        "category": "ai-tech",
+        "profile": "tech-news",
+    })
     config = tmp_path / "config.json"
     config.write_text(json.dumps(payload), encoding="utf-8")
     completed = run_preflight(config, {"DEEPSEEK_API_KEY": "horizon-preflight-dummy-value"})
+    output = completed.stdout + completed.stderr
     assert completed.returncode == 2
     assert "missing: LWN_KEY" in completed.stdout
     assert "model_called: false" in completed.stdout
+    assert "horizon-preflight-dummy-value" not in output
 
 
 def test_invalid_config_does_not_echo_rejected_input(tmp_path: Path):
@@ -206,6 +211,7 @@ def test_invalid_config_does_not_echo_rejected_input(tmp_path: Path):
 )
 def test_unattended_providers_are_blocked(tmp_path: Path, provider: str, extra: dict, expected: str):
     payload = json.loads(DEPLOY.read_text(encoding="utf-8"))
+    payload["ai"].pop("extra_body", None)
     payload["ai"]["provider"] = provider
     payload["ai"].update(extra)
     config = tmp_path / "config.json"

@@ -1,20 +1,21 @@
-name: Horizon manual run
+name: Horizon daily digest
 
-# Fork deployment for QQueng/Horizon.
-# The upstream template at daily-summary.yml.disabled runs on a UTC cron and
-# publishes GitHub Pages. This workflow leaves that timer out and does not
-# publish, upload, or commit generated files.
-# data/config.deploy.json is the official Actions example with webhook and the
-# LWN source turned off. It records the upstream sample, not a personal choice.
-# A manual run with the default input only checks configuration. Horizon runs
-# only when that check passes and run_pipeline is set. No model is called before
-# the check. The webhook URL is not passed into the runner.
+# QQueng/Horizon daily digest.
+# cron '0 0 * * *' is 08:00 Asia/Shanghai every day, including weekends.
+# GitHub may start the job later than that clock time. This file does not
+# promise that the digest exists at 08:00 or that anyone receives it then.
+# A scheduled run checks configuration and, only after that check passes,
+# runs Horizon. workflow_dispatch with run_pipeline left false only checks.
+# Pages, email, WeChat, and webhooks stay off. The digest Markdown is uploaded
+# as a private Actions artifact and is not committed.
 
 on:
+  schedule:
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       run_pipeline:
-        description: "Run Horizon after preflight. This calls the configured model and can incur charges. Leave off to only check configuration. 检查通过后才会调用模型，可能产生费用；默认只检查配置。"
+        description: "After preflight passes, run Horizon and call DeepSeek. This can incur charges. Leave off to only check configuration. 定时运行不看这个开关；手动运行需显式打开。"
         required: false
         type: boolean
         default: false
@@ -23,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: horizon-manual-${{ github.workflow }}-${{ github.ref }}
+  group: horizon-daily-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -31,6 +32,8 @@ jobs:
     name: Check configuration
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -70,11 +73,12 @@ jobs:
   run:
     name: Run Horizon
     needs: check
-    if: ${{ inputs.run_pipeline }}
+    if: ${{ success() && (github.event_name == 'schedule' || inputs.run_pipeline == true || inputs.run_pipeline == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
       contents: read
+      actions: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -122,7 +126,30 @@ jobs:
           LWN_KEY: ${{ secrets.LWN_KEY }}
         run: uv run horizon --hours 24 --config data/config.deploy.json
 
-      - name: Leave generated files unpublished
+      - name: Stage Chinese digest for artifact
+        if: success()
         run: |
-          echo "Generated files stay on this runner and are discarded with the job."
-          echo "This job does not commit, upload, or publish them."
+          set -euo pipefail
+          mapfile -t files < <(find data/summaries -maxdepth 1 -type f -name 'horizon-*-zh.md' -printf '%p\n' | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::Horizon finished without a Chinese Markdown digest. No artifact was uploaded."
+            exit 1
+          fi
+          src="${files[-1]}"
+          if [ ! -s "$src" ]; then
+            echo "::error::Chinese digest is empty. No artifact was uploaded."
+            exit 1
+          fi
+          mkdir -p digest
+          cp -- "$src" digest/horizon-zh.md
+          test -s digest/horizon-zh.md
+
+      - name: Upload digest artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-digest
+          path: digest/horizon-zh.md
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: false
