@@ -8,6 +8,7 @@ from urllib.parse import quote, urlsplit
 
 from .localization import normalize_language
 from ..models import ContentItem
+from ..timestamps import shanghai_parts
 
 
 _CJK = r"[\u4e00-\u9fff\u3400-\u4dbf]"
@@ -401,10 +402,8 @@ class DailySummarizer:
             source_parts.append(_escape_markdown(item.author or "unknown"))
         if item.published_at:
             if language == "zh":
-                source_parts.append(
-                    f"{item.published_at.month}月{item.published_at.day}日 "
-                    f"{item.published_at:%H:%M}"
-                )
+                month, day, clock = shanghai_parts(item.published_at)
+                source_parts.append(f"{month}月{day}日 {clock} 北京时间")
             else:
                 day = item.published_at.strftime("%d").lstrip("0")
                 source_parts.append(item.published_at.strftime(f"%b {day}, %H:%M"))
@@ -415,6 +414,8 @@ class DailySummarizer:
             safe_discussion_url = _safe_url(discussion_url)
             if safe_discussion_url and str(discussion_url) != raw_url:
                 source_line += f' · [{labels["discussion"]}]({safe_discussion_url})'
+        if url and language == "zh":
+            source_line += f" · [原文]({url})"
 
         title_link = f"[{title}]({url})" if url else title
 

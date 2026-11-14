@@ -38,7 +38,7 @@ def run_preflight(config: Path, env_updates: dict[str, str] | None = None):
     )
 
 
-def test_deploy_config_caps_four_categories_without_secrets():
+def test_deploy_config_is_finance_only_with_a_ten_item_cap():
     deploy = json.loads(DEPLOY.read_text(encoding="utf-8"))
     text = DEPLOY.read_text(encoding="utf-8")
     assert deploy["ai"]["provider"] == "deepseek"
@@ -53,27 +53,22 @@ def test_deploy_config_caps_four_categories_without_secrets():
     assert deploy["sources"]["hackernews"]["enabled"] is False
     assert deploy["sources"]["reddit"]["enabled"] is False
     assert deploy["sources"]["telegram"]["enabled"] is False
-    assert deploy["digest"]["max_items"] == 20
+    assert deploy["processing"]["default_profile"] == "finance-news"
+    assert set(deploy["processing"]["profile_settings"]) == {"finance-news"}
+    assert deploy["processing"]["profile_settings"]["finance-news"]["threshold"] == 7.0
+    assert deploy["digest"]["max_items"] == 10
     assert deploy["digest"]["default_group_limit"] == 1
     groups = deploy["digest"]["category_groups"]
-    assert [group["limit"] for group in groups.values()] == [5, 5, 5, 5]
-    assert set(groups) == {
-        "ai-tech",
-        "finance-markets",
-        "engineering-architecture",
-        "history-humanities",
-    }
+    assert set(groups) == {"finance-markets"}
+    assert groups["finance-markets"]["limit"] == 10
     feeds = deploy["sources"]["rss"]
-    assert {item["category"] for item in feeds} == set(groups)
+    assert len({item["url"] for item in feeds}) >= 4
+    assert {item["category"] for item in feeds} == {"finance-markets"}
+    assert {item["profile"] for item in feeds} == {"finance-news"}
     assert all(item["enabled"] and item["url"].startswith("https://") for item in feeds)
     assert "${" not in text
     assert "deepseek-v4-flash" not in text
     assert "sk-" not in text
-    for profile_id, threshold in deploy["processing"]["profile_settings"].items():
-        assert threshold["threshold"] == 7.0
-        assert profile_id in {
-            "tech-news", "finance-news", "engineering-news", "humanities-news",
-        }
 
 
 def test_workflow_schedule_runs_pipeline_and_uploads_digest_artifact():

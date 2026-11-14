@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from src.ai.prompting.enrichment import (
     artifact_prompt,
@@ -7,6 +7,7 @@ from src.ai.prompting.enrichment import (
     item_context,
     tool_planning_prompt,
 )
+from src.timestamps import within_collection_window
 from src.models import (
     ClassificationResult,
     ContentAnalysis,
@@ -70,3 +71,42 @@ def test_enrichment_context_uses_profile_content_budget():
     assert "OPENING" in context
     assert "MIDDLE" in context
     assert "ENDING" in context
+
+
+def test_item_context_shows_beijing_clock_for_a_utc_instant():
+    profile = PROFILES.get("finance-news")
+    item = ContentItem(
+        id="rss:test:clock",
+        source_type=SourceType.RSS,
+        title="Clock",
+        url="https://example.com/clock",
+        published_at=datetime(2026, 11, 14, 10, 54, tzinfo=timezone.utc),
+    )
+
+    context = item_context(item, profile, include_content=False)
+
+    assert "Published (UTC): 2026-11-14T10:54:00+00:00" in context
+    assert "Published (Asia/Shanghai): 11月14日 18:54 北京时间" in context
+
+
+def test_finance_profile_keeps_personnel_wording_and_drops_web_search():
+    profile = PROFILES.get("finance-news")
+    text = "\n".join([
+        profile.analysis_prompt,
+        profile.enrichment_prompt,
+    ])
+    assert "辞职" in text and "被解职" in text
+    assert "24 hours" in text
+    assert "does not guarantee" in text
+    assert all(block.tools == [] for block in profile.definition.enrichment.blocks)
+
+
+def test_collection_window_drops_items_older_than_cutoff():
+    now = datetime(2026, 11, 14, 11, 26, tzinfo=timezone.utc)
+    since = now - timedelta(hours=24)
+    assert within_collection_window(
+        datetime(2026, 11, 14, 10, 54, tzinfo=timezone.utc), since
+    )
+    assert not within_collection_window(
+        datetime(2026, 11, 12, 16, 0, tzinfo=timezone.utc), since
+    )

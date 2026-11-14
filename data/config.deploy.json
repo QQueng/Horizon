@@ -20,21 +20,9 @@
   },
   "processing": {
     "profiles_dir": "profiles",
-    "default_profile": "tech-news",
+    "default_profile": "finance-news",
     "profile_settings": {
-      "tech-news": {
-        "threshold": 7.0,
-        "topic_dedup": true
-      },
       "finance-news": {
-        "threshold": 7.0,
-        "topic_dedup": true
-      },
-      "engineering-news": {
-        "threshold": 7.0,
-        "topic_dedup": true
-      },
-      "humanities-news": {
         "threshold": 7.0,
         "topic_dedup": true
       }
@@ -53,40 +41,16 @@
     },
     "rss": [
       {
-        "name": "量子位",
-        "url": "https://www.qbitai.com/feed",
-        "enabled": true,
-        "category": "ai-tech",
-        "profile": "tech-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "雷峰网",
-        "url": "https://www.leiphone.com/feed",
-        "enabled": true,
-        "category": "ai-tech",
-        "profile": "tech-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "InfoQ 中文",
-        "url": "https://www.infoq.cn/feed",
-        "enabled": true,
-        "category": "ai-tech",
-        "profile": "tech-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "MIT Technology Review",
-        "url": "https://www.technologyreview.com/feed/",
-        "enabled": true,
-        "category": "ai-tech",
-        "profile": "tech-news",
-        "content_extractor": "trafilatura"
-      },
-      {
         "name": "华尔街见闻",
         "url": "https://dedicated.wallstreetcn.com/rss.xml",
+        "enabled": true,
+        "category": "finance-markets",
+        "profile": "finance-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "日经中文",
+        "url": "https://cn.nikkei.com/rss.html",
         "enabled": true,
         "category": "finance-markets",
         "profile": "finance-news",
@@ -109,67 +73,11 @@
         "content_extractor": "trafilatura"
       },
       {
-        "name": "ArchDaily 中文",
-        "url": "https://www.archdaily.cn/cn/feed",
+        "name": "Investing.com 股市",
+        "url": "https://www.investing.com/rss/news_25.rss",
         "enabled": true,
-        "category": "engineering-architecture",
-        "profile": "engineering-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "建筑学院",
-        "url": "https://www.archcollege.com/feed",
-        "enabled": true,
-        "category": "engineering-architecture",
-        "profile": "engineering-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "Dezeen",
-        "url": "https://www.dezeen.com/feed/",
-        "enabled": true,
-        "category": "engineering-architecture",
-        "profile": "engineering-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "Engineering News-Record",
-        "url": "https://www.enr.com/rss/articles",
-        "enabled": true,
-        "category": "engineering-architecture",
-        "profile": "engineering-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "中国新闻网文化",
-        "url": "https://www.chinanews.com.cn/rss/culture.xml",
-        "enabled": true,
-        "category": "history-humanities",
-        "profile": "humanities-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "Archaeology Magazine",
-        "url": "https://www.archaeology.org/feed/",
-        "enabled": true,
-        "category": "history-humanities",
-        "profile": "humanities-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "Science News Archaeology",
-        "url": "https://www.sciencenews.org/topic/archaeology/feed",
-        "enabled": true,
-        "category": "history-humanities",
-        "profile": "humanities-news",
-        "content_extractor": "trafilatura"
-      },
-      {
-        "name": "Nature Archaeology",
-        "url": "https://www.nature.com/subjects/archaeology.rss",
-        "enabled": true,
-        "category": "history-humanities",
-        "profile": "humanities-news",
+        "category": "finance-markets",
+        "profile": "finance-news",
         "content_extractor": "trafilatura"
       }
     ]
@@ -178,40 +86,16 @@
     "time_window_hours": 24
   },
   "digest": {
-    "max_items": 20,
+    "max_items": 10,
     "profile_order": [
-      "tech-news",
-      "finance-news",
-      "engineering-news",
-      "humanities-news"
+      "finance-news"
     ],
     "category_groups": {
-      "ai-tech": {
-        "name": "AI与科技",
-        "limit": 5,
-        "categories": [
-          "ai-tech"
-        ]
-      },
       "finance-markets": {
         "name": "财经与市场",
-        "limit": 5,
+        "limit": 10,
         "categories": [
           "finance-markets"
-        ]
-      },
-      "engineering-architecture": {
-        "name": "工程与建筑",
-        "limit": 5,
-        "categories": [
-          "engineering-architecture"
-        ]
-      },
-      "history-humanities": {
-        "name": "历史与人文",
-        "limit": 5,
-        "categories": [
-          "history-humanities"
         ]
       }
     },

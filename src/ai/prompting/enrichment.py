@@ -1,6 +1,7 @@
 """Prompt construction for profile-driven content enrichment."""
 
 from ...models import ContentItem
+from ...timestamps import shanghai_parts
 from ...processing.content import select_content, split_content
 from ...processing.profiles import LoadedProfile, ProfileBlock
 from ...processing.tools import ToolResult
@@ -146,6 +147,11 @@ Return valid JSON only:
 Do not emit unknown block IDs. Omit optional blocks when there is no useful content. No tool results are available, so every `source_refs` list must be empty."""
 
 
+def _shanghai_label(moment) -> str:
+    month, day, clock = shanghai_parts(moment)
+    return f"{month}月{day}日 {clock} 北京时间"
+
+
 def item_context(
     item: ContentItem,
     profile: LoadedProfile,
@@ -168,7 +174,8 @@ def item_context(
 Title: {item.title}
 URL: {item.url}
 Source: {item.source_type.value}
-Published: {item.published_at.isoformat()}
+Published (UTC): {item.published_at.isoformat()}
+Published (Asia/Shanghai): {_shanghai_label(item.published_at)}
 Author: {item.author or "Unknown"}
 Analysis summary: {analysis.summary if analysis else ""}
 Analysis reason: {analysis.reason if analysis else ""}
