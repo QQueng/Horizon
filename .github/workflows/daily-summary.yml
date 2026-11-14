@@ -1,0 +1,128 @@
+name: Horizon manual run
+
+# Fork deployment for QQueng/Horizon.
+# The upstream template at daily-summary.yml.disabled runs on a UTC cron and
+# publishes GitHub Pages. This workflow leaves that timer out and does not
+# publish, upload, or commit generated files.
+# data/config.deploy.json is the official Actions example with webhook and the
+# LWN source turned off. It records the upstream sample, not a personal choice.
+# A manual run with the default input only checks configuration. Horizon runs
+# only when that check passes and run_pipeline is set. No model is called before
+# the check. The webhook URL is not passed into the runner.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_pipeline:
+        description: "Run Horizon after preflight. This calls the configured model and can incur charges. Leave off to only check configuration. 检查通过后才会调用模型，可能产生费用；默认只检查配置。"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horizon-manual-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.26"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check deploy config JSON syntax
+        run: uv run python -m json.tool data/config.deploy.json >/dev/null
+
+      - name: Check required configuration before any model call
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LWN_KEY: ${{ secrets.LWN_KEY }}
+        run: uv run python scripts/actions_preflight.py --config data/config.deploy.json
+
+  run:
+    name: Run Horizon
+    needs: check
+    if: ${{ inputs.run_pipeline }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.26"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check required configuration again
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LWN_KEY: ${{ secrets.LWN_KEY }}
+        run: uv run python scripts/actions_preflight.py --config data/config.deploy.json
+
+      - name: Run Horizon
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LWN_KEY: ${{ secrets.LWN_KEY }}
+        run: uv run horizon --hours 24 --config data/config.deploy.json
+
+      - name: Leave generated files unpublished
+        run: |
+          echo "Generated files stay on this runner and are discarded with the job."
+          echo "This job does not commit, upload, or publish them."
