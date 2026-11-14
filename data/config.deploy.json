@@ -1,0 +1,228 @@
+{
+  "ai": {
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "extra_body": {
+      "thinking": {
+        "type": "disabled"
+      }
+    },
+    "temperature": 0.3,
+    "max_tokens": 8192,
+    "throttle_sec": 1,
+    "languages": [
+      "zh"
+    ],
+    "analysis_concurrency": 3,
+    "enrichment_concurrency": 3
+  },
+  "processing": {
+    "profiles_dir": "profiles",
+    "default_profile": "tech-news",
+    "profile_settings": {
+      "tech-news": {
+        "threshold": 7.0,
+        "topic_dedup": true
+      },
+      "finance-news": {
+        "threshold": 7.0,
+        "topic_dedup": true
+      },
+      "engineering-news": {
+        "threshold": 7.0,
+        "topic_dedup": true
+      },
+      "humanities-news": {
+        "threshold": 7.0,
+        "topic_dedup": true
+      }
+    }
+  },
+  "sources": {
+    "github": [],
+    "hackernews": {
+      "enabled": false
+    },
+    "reddit": {
+      "enabled": false
+    },
+    "telegram": {
+      "enabled": false
+    },
+    "rss": [
+      {
+        "name": "量子位",
+        "url": "https://www.qbitai.com/feed",
+        "enabled": true,
+        "category": "ai-tech",
+        "profile": "tech-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "雷峰网",
+        "url": "https://www.leiphone.com/feed",
+        "enabled": true,
+        "category": "ai-tech",
+        "profile": "tech-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "InfoQ 中文",
+        "url": "https://www.infoq.cn/feed",
+        "enabled": true,
+        "category": "ai-tech",
+        "profile": "tech-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "MIT Technology Review",
+        "url": "https://www.technologyreview.com/feed/",
+        "enabled": true,
+        "category": "ai-tech",
+        "profile": "tech-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "华尔街见闻",
+        "url": "https://dedicated.wallstreetcn.com/rss.xml",
+        "enabled": true,
+        "category": "finance-markets",
+        "profile": "finance-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "FT中文网",
+        "url": "https://www.ftchinese.com/rss/news",
+        "enabled": true,
+        "category": "finance-markets",
+        "profile": "finance-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "经济观察网",
+        "url": "https://www.eeo.com.cn/rss.xml",
+        "enabled": true,
+        "category": "finance-markets",
+        "profile": "finance-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "ArchDaily 中文",
+        "url": "https://www.archdaily.cn/cn/feed",
+        "enabled": true,
+        "category": "engineering-architecture",
+        "profile": "engineering-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "建筑学院",
+        "url": "https://www.archcollege.com/feed",
+        "enabled": true,
+        "category": "engineering-architecture",
+        "profile": "engineering-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "Dezeen",
+        "url": "https://www.dezeen.com/feed/",
+        "enabled": true,
+        "category": "engineering-architecture",
+        "profile": "engineering-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "Engineering News-Record",
+        "url": "https://www.enr.com/rss/articles",
+        "enabled": true,
+        "category": "engineering-architecture",
+        "profile": "engineering-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "中国新闻网文化",
+        "url": "https://www.chinanews.com.cn/rss/culture.xml",
+        "enabled": true,
+        "category": "history-humanities",
+        "profile": "humanities-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "Archaeology Magazine",
+        "url": "https://www.archaeology.org/feed/",
+        "enabled": true,
+        "category": "history-humanities",
+        "profile": "humanities-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "Science News Archaeology",
+        "url": "https://www.sciencenews.org/topic/archaeology/feed",
+        "enabled": true,
+        "category": "history-humanities",
+        "profile": "humanities-news",
+        "content_extractor": "trafilatura"
+      },
+      {
+        "name": "Nature Archaeology",
+        "url": "https://www.nature.com/subjects/archaeology.rss",
+        "enabled": true,
+        "category": "history-humanities",
+        "profile": "humanities-news",
+        "content_extractor": "trafilatura"
+      }
+    ]
+  },
+  "collection": {
+    "time_window_hours": 24
+  },
+  "digest": {
+    "max_items": 20,
+    "profile_order": [
+      "tech-news",
+      "finance-news",
+      "engineering-news",
+      "humanities-news"
+    ],
+    "category_groups": {
+      "ai-tech": {
+        "name": "AI与科技",
+        "limit": 5,
+        "categories": [
+          "ai-tech"
+        ]
+      },
+      "finance-markets": {
+        "name": "财经与市场",
+        "limit": 5,
+        "categories": [
+          "finance-markets"
+        ]
+      },
+      "engineering-architecture": {
+        "name": "工程与建筑",
+        "limit": 5,
+        "categories": [
+          "engineering-architecture"
+        ]
+      },
+      "history-humanities": {
+        "name": "历史与人文",
+        "limit": 5,
+        "categories": [
+          "history-humanities"
+        ]
+      }
+    },
+    "default_group": "other",
+    "default_group_limit": 1
+  },
+  "webhook": {
+    "enabled": false,
+    "url_env": "HORIZON_WEBHOOK_URL"
+  },
+  "wechat": {
+    "enabled": false
+  }
+}

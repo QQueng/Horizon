@@ -1,0 +1,155 @@
+name: Horizon daily digest
+
+# QQueng/Horizon daily digest.
+# cron '0 0 * * *' is 08:00 Asia/Shanghai every day, including weekends.
+# GitHub may start the job later than that clock time. This file does not
+# promise that the digest exists at 08:00 or that anyone receives it then.
+# A scheduled run checks configuration and, only after that check passes,
+# runs Horizon. workflow_dispatch with run_pipeline left false only checks.
+# Pages, email, WeChat, and webhooks stay off. The digest Markdown is uploaded
+# as a private Actions artifact and is not committed.
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      run_pipeline:
+        description: "After preflight passes, run Horizon and call DeepSeek. This can incur charges. Leave off to only check configuration. 定时运行不看这个开关；手动运行需显式打开。"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horizon-daily-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.26"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check deploy config JSON syntax
+        run: uv run python -m json.tool data/config.deploy.json >/dev/null
+
+      - name: Check required configuration before any model call
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LWN_KEY: ${{ secrets.LWN_KEY }}
+        run: uv run python scripts/actions_preflight.py --config data/config.deploy.json
+
+  run:
+    name: Run Horizon
+    needs: check
+    if: ${{ success() && (github.event_name == 'schedule' || inputs.run_pipeline == true || inputs.run_pipeline == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.26"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check required configuration again
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LWN_KEY: ${{ secrets.LWN_KEY }}
+        run: uv run python scripts/actions_preflight.py --config data/config.deploy.json
+
+      - name: Run Horizon
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LWN_KEY: ${{ secrets.LWN_KEY }}
+        run: uv run horizon --hours 24 --config data/config.deploy.json
+
+      - name: Stage Chinese digest for artifact
+        if: success()
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find data/summaries -maxdepth 1 -type f -name 'horizon-*-zh.md' -printf '%p\n' | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::Horizon finished without a Chinese Markdown digest. No artifact was uploaded."
+            exit 1
+          fi
+          src="${files[-1]}"
+          if [ ! -s "$src" ]; then
+            echo "::error::Chinese digest is empty. No artifact was uploaded."
+            exit 1
+          fi
+          mkdir -p digest
+          cp -- "$src" digest/horizon-zh.md
+          test -s digest/horizon-zh.md
+
+      - name: Upload digest artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-digest
+          path: digest/horizon-zh.md
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: false
